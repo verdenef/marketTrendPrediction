@@ -9,6 +9,7 @@ paws022/
 main/data/logs/
 main/data/active_dataset.csv
 main/data/processed/
+main/data/exports/
 
 # Compiled / cache
 __pycache__/

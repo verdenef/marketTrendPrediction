@@ -12,6 +12,7 @@ from components.dataset_ui import render_dataset_section
 from components.preprocessing_ui import render_preprocessing_section
 from components.evaluation_ui import render_evaluation_section
 from components.training_ui import render_training_section
+from components.inference_ui import render_inference_section
 
 st.set_page_config(
     page_title="DOGE BI — Market Trend Prediction",
@@ -25,7 +26,7 @@ PAGES = {
     "Preprocessing": render_preprocessing_section,
     "Model Training": render_training_section,
     "Evaluation": render_evaluation_section,
-    "Live Inference": lambda: st.info("Live inference — coming in backlog Item 5."),
+    "Live Inference": render_inference_section,
 }
 
 
