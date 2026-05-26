@@ -1,0 +1,4 @@
+data/logs/
+data/logs/training_history.json
+data/active_dataset.csv
+data/processed/
