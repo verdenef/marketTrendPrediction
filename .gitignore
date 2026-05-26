@@ -1,3 +1,6 @@
 /.venv/
 /.venv312/
 
+# POS kernel (keep private)
+/paws022/
+
