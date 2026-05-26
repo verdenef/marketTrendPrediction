@@ -17,6 +17,7 @@ IMPORT_LOG_PATH = LOGS_DIR / "dataset_imports.json"
 PROCESSED_DATASET_PATH = PROCESSED_DIR / "processed_dataset.csv"
 PREPROCESSING_LOG_PATH = LOGS_DIR / "preprocessing_runs.json"
 TRAINING_LOG_PATH = LOGS_DIR / "training_history.json"
+EVALUATION_LOG_PATH = LOGS_DIR / "evaluation_history.json"
 DEFAULT_DATASET_PATH = DATA_DIR / "coin_Dogecoin.csv"
 
 
@@ -146,5 +147,32 @@ def log_training_run(
     }
     records.append(entry)
     with TRAINING_LOG_PATH.open("w", encoding="utf-8") as f:
+        json.dump(records, f, indent=2)
+    return entry
+
+
+def log_evaluation_run(
+    *,
+    metrics_by_model: dict[str, dict[str, float]],
+    training_history_ids: dict[str, int],
+    preprocessing_meta: dict[str, Any],
+) -> dict[str, Any]:
+    """Append a comparative evaluation run into evaluation_history.json."""
+    ensure_storage_dirs()
+
+    records: list[dict[str, Any]] = []
+    if EVALUATION_LOG_PATH.exists():
+        with EVALUATION_LOG_PATH.open(encoding="utf-8") as f:
+            records = json.load(f)
+
+    entry = {
+        "id": len(records) + 1,
+        "metrics_by_model": metrics_by_model,
+        "training_history_ids": training_history_ids,
+        "preprocessing_meta": preprocessing_meta,
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    records.append(entry)
+    with EVALUATION_LOG_PATH.open("w", encoding="utf-8") as f:
         json.dump(records, f, indent=2)
     return entry

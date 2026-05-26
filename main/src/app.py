@@ -10,6 +10,7 @@ import streamlit as st
 
 from components.dataset_ui import render_dataset_section
 from components.preprocessing_ui import render_preprocessing_section
+from components.evaluation_ui import render_evaluation_section
 from components.training_ui import render_training_section
 
 st.set_page_config(
@@ -23,7 +24,7 @@ PAGES = {
     "Dataset": render_dataset_section,
     "Preprocessing": render_preprocessing_section,
     "Model Training": render_training_section,
-    "Evaluation": lambda: st.info("Evaluation dashboard — coming in backlog Item 4."),
+    "Evaluation": render_evaluation_section,
     "Live Inference": lambda: st.info("Live inference — coming in backlog Item 5."),
 }
 
