@@ -2,6 +2,8 @@
 
 Streamlit app for IS 108 — Dogecoin market trend / trading signal prediction.
 
+POS (tasks, architecture, docs) lives in [`../paws022/`](../paws022/).
+
 ## Setup
 
 ```powershell

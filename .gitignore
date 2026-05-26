@@ -1,6 +1,15 @@
-/.venv/
-/.venv312/
+# Python venvs
+.venv/
+.venv312/
 
-# POS kernel (keep private)
-/paws022/
+# POS sidecar (not in this repo push)
+paws022/
 
+# Local data artifacts
+main/data/logs/
+main/data/active_dataset.csv
+main/data/processed/
+
+# Compiled / cache
+__pycache__/
+*.pyc
