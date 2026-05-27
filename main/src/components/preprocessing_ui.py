@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from utils.file_storage import load_processed_dataset, log_preprocessing_run, save_processed_dataset
+from utils.model_cache import invalidate_model_cache
 from utils.preprocessing import impute_missing, run_preprocessing_pipeline
 from utils.session_data import resolve_raw_dataset
 
@@ -82,6 +83,7 @@ def render_preprocessing_section() -> None:
         st.session_state.y_train = result.y_train
         st.session_state.y_test = result.y_test
         st.session_state.feature_columns = result.feature_columns
+        invalidate_model_cache()
 
         save_processed_dataset(result.processed)
         entry = log_preprocessing_run(

@@ -44,6 +44,16 @@ def main() -> None:
             list(PAGES.keys()),
             label_visibility="collapsed",
         )
+        st.divider()
+        st.markdown("**Grader demo (5 steps)**")
+        st.markdown(
+            "1. Dataset → load project data\n"
+            "2. Preprocessing → run pipeline\n"
+            "3. Model Training → **Train all models**\n"
+            "4. Evaluation → run comparison\n"
+            "5. Live Inference → run + export report"
+        )
+        st.caption("Use `.venv312` (Python 3.12) for ANN/TensorFlow.")
 
     PAGES[selection]()
 

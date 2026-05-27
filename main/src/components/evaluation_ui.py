@@ -17,9 +17,12 @@ from sklearn.metrics import (
     recall_score,
 )
 
-from models.ann_model import train_ann
-from models.knn_model import train_knn
-from models.svm_model import train_svm
+from utils.model_cache import (
+    data_cache_key,
+    get_or_train_ann,
+    get_or_train_knn,
+    get_or_train_svm,
+)
 from utils.file_storage import (
     PREPROCESSING_LOG_PATH,
     TRAINING_LOG_PATH,
@@ -81,7 +84,8 @@ def render_evaluation_section() -> None:
     st.header("Evaluation Dashboard (KNN vs SVM vs ANN)")
     st.caption(
         "Compares Accuracy, Precision, Recall, and F1-score using the identical chronological test split. "
-        "Confusion matrices are rendered for each trained model."
+        "Confusion matrices are rendered for each trained model. "
+        "Reuses in-memory trained models when hyperparameters and data match Model Training."
     )
 
     bundle = resolve_train_test_data()
@@ -90,6 +94,7 @@ def render_evaluation_section() -> None:
         return
 
     X_train, X_test, y_train, y_test, feature_columns = bundle
+    data_key = data_cache_key(X_train, feature_columns)
     meta = _latest_preprocessing_meta()
 
     st.success(
@@ -128,57 +133,65 @@ def render_evaluation_section() -> None:
     train_history_ids: dict[str, int] = {}
 
     if st.button("Run comparative evaluation", type="primary"):
-        with st.spinner("Evaluating models (train -> predict -> metrics)..."):
-            # KNN
+        with st.spinner("Evaluating models (using cached models when possible)..."):
             if knn_run is not None:
                 params = knn_run.get("params", {})
-                n_neighbors = int(params.get("n_neighbors", 5))
-                metric = str(params.get("metric", "euclidean"))
-                model = train_knn(X_train, y_train, n_neighbors=n_neighbors, metric=metric).model
-                y_pred = model.predict(X_test)
-                y_pred_by_model["knn"] = y_pred
-                metrics_by_model["knn"] = _compute_metrics(y_test, y_pred)
-                train_history_ids["knn"] = int(knn_run["id"])
+                try:
+                    model = get_or_train_knn(
+                        X_train,
+                        y_train,
+                        n_neighbors=int(params.get("n_neighbors", 5)),
+                        metric=str(params.get("metric", "euclidean")),
+                        data_key=data_key,
+                    )
+                    y_pred = model.predict(X_test)
+                    y_pred_by_model["knn"] = y_pred
+                    metrics_by_model["knn"] = _compute_metrics(y_test, y_pred)
+                    train_history_ids["knn"] = int(knn_run["id"])
+                except Exception as exc:
+                    st.error(f"KNN evaluation failed: {exc}")
 
-            # SVM
             if svm_run is not None:
                 params = svm_run.get("params", {})
-                kernel = str(params.get("kernel", "rbf"))
-                C = float(params.get("C", 1.0))
-                gamma = params.get("gamma", "scale")
-                model = train_svm(X_train, y_train, kernel=kernel, C=C, gamma=gamma).model
-                y_pred = model.predict(X_test)
-                y_pred_by_model["svm"] = y_pred
-                metrics_by_model["svm"] = _compute_metrics(y_test, y_pred)
-                train_history_ids["svm"] = int(svm_run["id"])
+                try:
+                    model = get_or_train_svm(
+                        X_train,
+                        y_train,
+                        kernel=str(params.get("kernel", "rbf")),
+                        C=float(params.get("C", 1.0)),
+                        gamma=params.get("gamma", "scale"),
+                        data_key=data_key,
+                    )
+                    y_pred = model.predict(X_test)
+                    y_pred_by_model["svm"] = y_pred
+                    metrics_by_model["svm"] = _compute_metrics(y_test, y_pred)
+                    train_history_ids["svm"] = int(svm_run["id"])
+                except Exception as exc:
+                    st.error(f"SVM evaluation failed: {exc}")
 
-            # ANN
             if ann_run is not None:
                 params = ann_run.get("params", {})
-                hidden_layers = params.get("hidden_layers", [64, 32])
-                epochs = int(params.get("epochs", 20))
-                batch_size = int(params.get("batch_size", 32))
-                learning_rate = float(params.get("learning_rate", 0.001))
-
                 try:
-                    result = train_ann(
+                    model = get_or_train_ann(
                         X_train,
                         y_train,
                         X_test,
                         y_test,
-                        hidden_layers=hidden_layers,
-                        epochs=epochs,
-                        batch_size=batch_size,
-                        learning_rate=learning_rate,
+                        hidden_layers=params.get("hidden_layers", [64, 32]),
+                        epochs=int(params.get("epochs", 20)),
+                        batch_size=int(params.get("batch_size", 32)),
+                        learning_rate=float(params.get("learning_rate", 0.001)),
+                        data_key=data_key,
                     )
-                except ImportError as exc:
-                    st.error(f"ANN evaluation skipped: {exc}")
-                else:
-                    probs = result.model.predict(X_test.values, verbose=0).flatten()
+                    probs = model.predict(X_test.values, verbose=0).flatten()
                     y_pred = (probs >= 0.5).astype(int)
                     y_pred_by_model["ann"] = y_pred
                     metrics_by_model["ann"] = _compute_metrics(y_test, y_pred)
                     train_history_ids["ann"] = int(ann_run["id"])
+                except ImportError as exc:
+                    st.error(f"ANN evaluation skipped: {exc}")
+                except Exception as exc:
+                    st.error(f"ANN evaluation failed: {exc}")
 
         if metrics_by_model:
             preprocess_info = {

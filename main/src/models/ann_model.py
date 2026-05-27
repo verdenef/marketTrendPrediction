@@ -16,8 +16,10 @@ if TYPE_CHECKING:
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 _TENSORFLOW_HELP = (
-    "TensorFlow is required for ANN training. Install with Python 3.11 or 3.12: "
-    "`pip install tensorflow>=2.15`. (TensorFlow does not yet support Python 3.14.)"
+    "TensorFlow is required for ANN training. Use Python 3.12 with the project venv: "
+    "`py -3.12 -m venv .venv312`, activate `.venv312`, then "
+    "`pip install -r main/requirements.txt`. "
+    "TensorFlow does not install on Python 3.14."
 )
 
 

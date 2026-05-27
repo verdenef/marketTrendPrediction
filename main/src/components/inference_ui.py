@@ -11,9 +11,12 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from models.ann_model import train_ann
-from models.knn_model import train_knn
-from models.svm_model import train_svm
+from utils.model_cache import (
+    data_cache_key,
+    get_or_train_ann,
+    get_or_train_knn,
+    get_or_train_svm,
+)
 from utils.file_storage import (
     EVALUATION_LOG_PATH,
     PREPROCESSING_LOG_PATH,
@@ -43,52 +46,6 @@ def _latest_train_run_for_model(model_name: str) -> Optional[dict[str, Any]]:
         if run.get("model") == model_name:
             return run
     return None
-
-
-def _predict_with_knn(X_train, y_train, X_latest: pd.DataFrame, run: dict[str, Any]) -> int:
-    params = run.get("params", {})
-    n_neighbors = int(params.get("n_neighbors", 5))
-    metric = str(params.get("metric", "euclidean"))
-    model = train_knn(X_train, y_train, n_neighbors=n_neighbors, metric=metric).model
-    return int(model.predict(X_latest)[0])
-
-
-def _predict_with_svm(X_train, y_train, X_latest: pd.DataFrame, run: dict[str, Any]) -> int:
-    params = run.get("params", {})
-    kernel = str(params.get("kernel", "rbf"))
-    C = float(params.get("C", 1.0))
-    gamma = params.get("gamma", "scale")
-    model = train_svm(X_train, y_train, kernel=kernel, C=C, gamma=gamma).model
-    return int(model.predict(X_latest)[0])
-
-
-def _predict_with_ann(
-    X_train,
-    y_train,
-    X_test,
-    y_test,
-    X_latest: pd.DataFrame,
-    run: dict[str, Any],
-) -> int:
-    params = run.get("params", {})
-    hidden_layers = params.get("hidden_layers", [64, 32])
-    epochs = int(params.get("epochs", 20))
-    batch_size = int(params.get("batch_size", 32))
-    learning_rate = float(params.get("learning_rate", 0.001))
-
-    result = train_ann(
-        X_train,
-        y_train,
-        X_test,
-        y_test,
-        hidden_layers=hidden_layers,
-        epochs=epochs,
-        batch_size=batch_size,
-        learning_rate=learning_rate,
-    )
-
-    probs = result.model.predict(X_latest.values, verbose=0).flatten()
-    return int(probs[0] >= 0.5)
 
 
 def _to_buy_sell(pred_class: int) -> str:
@@ -187,7 +144,8 @@ def render_inference_section() -> None:
     st.header("Live Inference (BUY / SELL) & Report Export")
     st.caption(
         "Runs prediction for the latest engineered/scaled record in `processed_dataset.csv` "
-        "using the latest hyperparameters from `training_history.json`."
+        "using the latest hyperparameters from `training_history.json`. "
+        "Cached models from Model Training are reused when parameters match."
     )
 
     bundle = resolve_train_test_data()
@@ -196,6 +154,7 @@ def render_inference_section() -> None:
         return
 
     X_train, X_test, y_train, y_test, feature_columns = bundle
+    data_key = data_cache_key(X_train, feature_columns)
     processed = load_processed_dataset()
     if processed is None:
         st.warning("`main/data/processed/processed_dataset.csv` not found. Run Preprocessing again.")
@@ -246,35 +205,55 @@ def render_inference_section() -> None:
     if st.button("Run inference for latest record", type="primary"):
         inference_results: dict[str, dict[str, Any]] = {}
 
+        X_latest = processed.iloc[[-1]][feature_columns]
+
         if latest_runs["knn"] is not None:
             try:
-                pred = _predict_with_knn(X_train, y_train, processed.iloc[[-1]][feature_columns], latest_runs["knn"])
+                params = latest_runs["knn"].get("params", {})
+                model = get_or_train_knn(
+                    X_train,
+                    y_train,
+                    n_neighbors=int(params.get("n_neighbors", 5)),
+                    metric=str(params.get("metric", "euclidean")),
+                    data_key=data_key,
+                )
+                pred = int(model.predict(X_latest)[0])
                 inference_results["knn"] = {"pred": pred, "tag": _to_buy_sell(pred)}
             except Exception as exc:
                 inference_results["knn"] = {"pred": None, "tag": "ERROR", "error": str(exc)}
 
         if latest_runs["svm"] is not None:
             try:
-                pred = _predict_with_svm(
+                params = latest_runs["svm"].get("params", {})
+                model = get_or_train_svm(
                     X_train,
                     y_train,
-                    processed.iloc[[-1]][feature_columns],
-                    latest_runs["svm"],
+                    kernel=str(params.get("kernel", "rbf")),
+                    C=float(params.get("C", 1.0)),
+                    gamma=params.get("gamma", "scale"),
+                    data_key=data_key,
                 )
+                pred = int(model.predict(X_latest)[0])
                 inference_results["svm"] = {"pred": pred, "tag": _to_buy_sell(pred)}
             except Exception as exc:
                 inference_results["svm"] = {"pred": None, "tag": "ERROR", "error": str(exc)}
 
         if latest_runs["ann"] is not None:
             try:
-                pred = _predict_with_ann(
+                params = latest_runs["ann"].get("params", {})
+                model = get_or_train_ann(
                     X_train,
                     y_train,
                     X_test,
                     y_test,
-                    processed.iloc[[-1]][feature_columns],
-                    latest_runs["ann"],
+                    hidden_layers=params.get("hidden_layers", [64, 32]),
+                    epochs=int(params.get("epochs", 20)),
+                    batch_size=int(params.get("batch_size", 32)),
+                    learning_rate=float(params.get("learning_rate", 0.001)),
+                    data_key=data_key,
                 )
+                probs = model.predict(X_latest.values, verbose=0).flatten()
+                pred = int(probs[0] >= 0.5)
                 inference_results["ann"] = {"pred": pred, "tag": _to_buy_sell(pred)}
             except ImportError as exc:
                 inference_results["ann"] = {"pred": None, "tag": "ERROR", "error": str(exc)}
